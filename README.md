@@ -200,37 +200,31 @@ value parsed through a float turns an exact match into a false mismatch.
 
 ## How I worked with the agent
 
-> **Note to me: read this through before submitting and cut anything that does not match
-> how it actually felt. It should be my account, not the agent's.**
+I used Claude Code for most of the code here. I decided what to build and checked what came
+back; it did the typing.
 
-I used Claude Code throughout, and the split was roughly: I decided the shape, it wrote
-the code, and I checked its work by making it prove things rather than assert them.
+The thing that helped most was doing the data analysis first, in Python, outside the
+project. Before any application code existed I had the agent read the three CSVs and list
+everything wrong with them. That gave me 12 defects and one deliberate non-error. I kept
+that list and checked every later claim against it. When the finished app reported ORG-A 7,
+ORG-B 5 and no REC-1055, I could tell it was right because the number came from somewhere
+else.
 
-**What worked.** Before writing any application code I had it profile the three CSVs
-independently — in Python, outside the project — to build a list of every defect in the
-data. That list became the specification: 12 planted defects plus one deliberate
-non-error. Every later claim about correctness got checked against it, and because the
-analysis was done with different tools from the implementation, an error in one would not
-hide an error in the other. The final output matched exactly: ORG-A 7, ORG-B 5,
-`REC-1055` absent.
+Twice I stopped it from writing code against an API it had not looked at. Next.js here is
+version 16 and there is an AGENTS.md in the repo saying the conventions have changed, so I
+made it read the docs in node_modules rather than write route handlers from memory. Same
+thing later with node:sqlite — it wanted to assume the API matched better-sqlite3, and it
+does not.
 
-**Where I made it stop and verify.** Twice it was about to rely on an API it had not
-checked. The Next.js version here is 16, and `AGENTS.md` in the repo warns that the
-conventions differ from training data, so I had it read `node_modules/next/dist/docs/`
-rather than write route handlers from memory. Later, when we swapped SQLite drivers, I had
-it probe `node:sqlite` at runtime instead of assuming it matched `better-sqlite3` — which
-is how we found the `readOnly` casing trap in question (a) below.
+When better-sqlite3 refused to install I wanted to fake the UI with hardcoded rows just to
+see something working. The agent pushed back and instead ran the real comparison over the
+real CSVs in memory. It was right. When SQLite finally worked, nothing had to be thrown
+away.
 
-**Where I pushed back.** When the native driver would not install, my instinct was to fall
-back to a hardcoded UI just to see something on screen. The agent argued against it —
-hardcoded rows would demonstrate neither of the two criteria worth 55% of the grade — and
-instead ran the real comparison logic over the real CSVs in memory, so nothing was
-throwaway when the database landed. That was the right call and I took it.
-
-**What I would do differently.** I let it write a lot of code before anything had run
-once. The tests existed for a while before `vitest` was installed, and untested tests are
-worth nothing — they happened to pass first try, but that was luck, not evidence. Next
-time I would get the toolchain working before generating anything.
+What I would do differently: I let it write a lot before running anything. The tests sat
+there unrun until vitest was installed. They passed first time, but I had no way of knowing
+that, and "the tests are written" is not the same as "the tests pass". Next time I get the
+toolchain working first.
 
 ---
 
@@ -238,41 +232,43 @@ time I would get the toolchain working before generating anything.
 
 ### a. Name one thing the AI agent got wrong. How did you notice?
 
-<!-- TODO: answer in a few sentences.
+There was a column in the results table I could not read. The agent had styled the detail
+text `#555`, which is fine on a white page. But globals.css switches to a dark background
+when your system is in dark mode, so on my machine it was dark grey on near-black. Nothing
+failed. It compiled, the tests passed, the data was correct. I only caught it because I
+opened the page and tried to read it. Colours are now set relative to the current text
+colour instead of being hardcoded.
 
-     A real one from this build, if you want it: when we switched from better-sqlite3 to
-     Node's built-in node:sqlite, the agent first carried over the better-sqlite3 API
-     verbatim — db.transaction(), db.pragma(), and { readonly: true }. None of the first
-     two exist in node:sqlite, and the third is spelled `readOnly`. The casing one is the
-     dangerous one: lowercase `readonly` is not an error, it is silently ignored, so you
-     get a writable connection that looks correct. It was caught by probing the API in a
-     throwaway script rather than trusting it, and there is now a comment on that line in
-     lib/db.ts.
-
-     Another honest option: the first version of the tenant scoping filtered System B by
-     its own location_id, which made REC-1077 disappear from ORG-A as a false
-     "missing in System B". -->
+Smaller one, same day: it wrote twelve entries in DECISIONS when the brief says three to
+ten. Each entry looked fine, which is why reading them did not help. I found it by going
+back to the brief and counting.
 
 ### b. Which part of your submission are you least confident about, and why?
 
-<!-- TODO: answer in a few sentences.
+The rule that tells a split record apart from a duplicate. It works by looking for
+"part X of Y" in the System B label. That is what this dataset uses, so it is right here,
+but it is a string match on a free-text field. If a real export split a record without
+labelling it that way, my code calls it a duplicate and reports a disagreement that is not
+there.
 
-     Some candidates, pick what you actually believe:
-     - The four extra discrepancy reasons beyond the required four. They are real
-       disagreements, but I chose to report them; a reviewer might consider DATE_MISMATCH
-       or VOIDED_PRESENT_IN_B out of scope.
-     - The split-versus-duplicate rule keys off the "part X of Y" label. If a real export
-       split a record without labelling it, this would call it a duplicate.
-     - node:sqlite is experimental and requires Node 22.5+. -->
+I did think about the alternative, which is to assume any two entries summing to the
+System A total are a split. I did not use it because it would hide genuine double entries
+that happen to add up, and I would rather report something that is not wrong than hide
+something that is. But I am not certain that is the right trade.
+
+Also: tenant isolation has no test. I have read the SQL and I believe it, and the API will
+not return anything without an org. That is still me vouching for it rather than proving
+it.
 
 ### c. If you had a second day, what would you fix first?
 
-<!-- TODO: answer in a few sentences.
+The isolation test. `loadOrgScopedData` is the only way records leave the database and it
+cannot be called without an org, but that is a description of the code, not evidence about
+it. I would build a small fixture database and assert that ORG-A's results contain no
+ORG-B rows. The case worth testing is REC-1077, where System B files the entry against the
+other org's location — that is the one a naive implementation gets wrong, and it is the
+reason the query matches System B on record reference instead of on location.
 
-     Candidates:
-     - A test that proves tenant isolation against the real database, not just in the
-       pure layer. It is the one hard rule in the brief ("must never be visible") and it
-       is currently verified by reading the SQL, not by a test.
-     - Deriving the org from a session instead of a dropdown.
-     - Reconciling at the base_value/adjustment level so the three dropped-adjustment
-       rows report the cause rather than a hint. -->
+After that, the org selector. Right now it is a dropdown and anyone can change it.
+Authentication was out of scope so that is fine for this, but it is the first thing that
+would have to go.

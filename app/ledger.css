@@ -1,0 +1,473 @@
+/*
+ * Reconciliation ledger.
+ *
+ * The design brief for this screen was "plain and working beats pretty and
+ * broken", so the visual budget is spent on legibility rather than ornament:
+ *
+ *   - Ink and paper. Structure is carried by hairline rules, weight and
+ *     letter-spacing, not by boxes, shadows or coloured pills. Eight reason
+ *     types rendered as eight coloured badges would be noise, and no eight-way
+ *     categorical palette survives a colour-blindness check anyway.
+ *
+ *   - Colour appears in exactly one place: the difference bar, where the sign
+ *     is genuinely meaningful (System B under System A, or over it). It is a
+ *     diverging blue/red pair with a neutral zero, validated for contrast and
+ *     for protanopia/deuteranopia/tritanopia against both surfaces. The sign is
+ *     also printed as a number beside the bar, so colour never carries meaning
+ *     alone.
+ *
+ *   - Money is monospaced and tabular so digits line up in a column, which is
+ *     the whole point of putting two systems' values next to each other.
+ *
+ * Dark mode is a selected set of steps against a dark surface, not an inversion.
+ */
+
+.ledger {
+  /* Light — the default. */
+  --surface: #fcfcfb;
+  --plane: #f9f9f7;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --ink-muted: #898781;
+  --rule: #e1e0d9;
+  --axis: #c3c2b7;
+  --hairline: rgba(11, 11, 11, 0.1);
+  --wash: rgba(11, 11, 11, 0.035);
+
+  /* Diverging pair: System B below System A, and above it. */
+  --under: #2a78d6;
+  --over: #e34948;
+
+  color-scheme: light;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--font-geist-sans), system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  min-height: 100%;
+  padding: 2.5rem 2rem 4rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .ledger {
+    --surface: #1a1a19;
+    --plane: #0d0d0d;
+    --ink: #ffffff;
+    --ink-2: #c3c2b7;
+    --ink-muted: #898781;
+    --rule: #2c2c2a;
+    --axis: #383835;
+    --hairline: rgba(255, 255, 255, 0.1);
+    --wash: rgba(255, 255, 255, 0.045);
+    --under: #3987e5;
+    --over: #e66767;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] .ledger {
+  --surface: #1a1a19;
+  --plane: #0d0d0d;
+  --ink: #ffffff;
+  --ink-2: #c3c2b7;
+  --ink-muted: #898781;
+  --rule: #2c2c2a;
+  --axis: #383835;
+  --hairline: rgba(255, 255, 255, 0.1);
+  --wash: rgba(255, 255, 255, 0.045);
+  --under: #3987e5;
+  --over: #e66767;
+  color-scheme: dark;
+}
+
+/* ---------------------------------------------------------------- masthead */
+
+.ledger__masthead {
+  border-bottom: 1px solid var(--ink);
+  padding-bottom: 1rem;
+  margin-bottom: 1.75rem;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 2rem;
+  flex-wrap: wrap;
+}
+
+.ledger__eyebrow {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  margin-bottom: 0.4rem;
+}
+
+.ledger__title {
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+/* The org selector is the tenant boundary, so it is given real prominence
+   rather than being hidden in a toolbar. */
+.ledger__scope {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+}
+
+.ledger__scope select {
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid var(--ink);
+  padding: 0.15rem 0.2rem;
+  cursor: pointer;
+}
+
+.ledger__scope select:focus-visible {
+  outline: 2px solid var(--under);
+  outline-offset: 2px;
+}
+
+/* ------------------------------------------------------------------ layout */
+
+.ledger__body {
+  display: grid;
+  grid-template-columns: 232px minmax(0, 1fr);
+  gap: 2.5rem;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .ledger__body {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.75rem;
+  }
+}
+
+/* ------------------------------------------------------- reason side panel */
+/*
+ * The filter and the summary are the same control. Each row is a horizontal
+ * bar of that reason's share of the org's disagreements — one hue, because
+ * this is magnitude, not identity — and clicking it filters the table.
+ */
+
+.panel__heading {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 0.25rem;
+}
+
+.reason {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-left: 2px solid transparent;
+  padding: 0.5rem 0.5rem 0.5rem 0.65rem;
+  cursor: pointer;
+  color: var(--ink-2);
+  font: inherit;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.reason:hover {
+  background: var(--wash);
+  color: var(--ink);
+}
+
+.reason:focus-visible {
+  outline: 2px solid var(--under);
+  outline-offset: -2px;
+}
+
+.reason[aria-pressed="true"] {
+  border-left-color: var(--ink);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.reason__line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.3rem;
+}
+
+.reason__label {
+  font-size: 13px;
+}
+
+.reason__count {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-muted);
+}
+
+.reason[aria-pressed="true"] .reason__count {
+  color: var(--ink);
+}
+
+.reason__track {
+  height: 4px;
+  background: var(--rule);
+}
+
+.reason__fill {
+  height: 100%;
+  background: var(--under);
+  border-radius: 0 2px 2px 0;
+  min-width: 2px;
+}
+
+/* Zero-count reasons stay listed but read as absent, so the reader can see
+   which disagreements this org does NOT have. */
+.reason--empty {
+  opacity: 0.45;
+}
+
+/* ------------------------------------------------------------------ ledger */
+
+.count-line {
+  font-size: 12px;
+  color: var(--ink-muted);
+  margin: 0 0 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.rows {
+  border-top: 1px solid var(--ink);
+}
+
+.colhead,
+.row {
+  display: grid;
+  grid-template-columns:
+    minmax(150px, 0.9fr) /* record + reason        */
+    minmax(96px, 0.5fr) /* location               */
+    minmax(104px, 0.6fr) /* system A               */
+    minmax(104px, 0.6fr) /* system B               */
+    minmax(168px, 0.9fr); /* difference bar         */
+  gap: 1rem;
+  align-items: baseline;
+}
+
+.colhead {
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  padding: 0.55rem 0.25rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+.row {
+  padding: 0.85rem 0.25rem 0.2rem;
+}
+
+.entry {
+  border-bottom: 1px solid var(--rule);
+  transition: background 120ms ease;
+}
+
+.entry:hover {
+  background: var(--wash);
+}
+
+.num {
+  text-align: right;
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 13.5px;
+  letter-spacing: -0.01em;
+}
+
+.record {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 13.5px;
+  font-weight: 500;
+}
+
+.reason-tag {
+  display: block;
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  margin-bottom: 0.2rem;
+}
+
+.location {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+.location__b {
+  color: var(--over);
+}
+
+.location__vs {
+  color: var(--ink-muted);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-size: 11px;
+  padding: 0 0.15rem;
+}
+
+.absent {
+  color: var(--ink-muted);
+}
+
+/* ---------------------------------------------------- the difference gauge */
+/*
+ * A diverging bar with zero at the centre: left arm means System B recorded
+ * less than System A, right arm means more. Bars are scaled against the
+ * largest absolute difference currently on screen, so the column is a ranking
+ * at a glance when sorted by value.
+ */
+
+.delta {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.delta__track {
+  position: relative;
+  flex: 1;
+  height: 10px;
+  min-width: 64px;
+  background: var(--plane);
+}
+
+/* The zero line, and the only "axis" on the page. */
+.delta__track::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -2px;
+  bottom: -2px;
+  width: 1px;
+  background: var(--axis);
+}
+
+.delta__fill {
+  position: absolute;
+  top: 0;
+  height: 100%;
+}
+
+.delta__fill--under {
+  background: var(--under);
+  border-radius: 2px 0 0 2px;
+}
+
+.delta__fill--over {
+  background: var(--over);
+  border-radius: 0 2px 2px 0;
+}
+
+.delta__value {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 12.5px;
+  min-width: 82px;
+  text-align: right;
+}
+
+.delta__value--under {
+  color: var(--under);
+}
+
+.delta__value--over {
+  color: var(--over);
+}
+
+/* The two systems agree on the amount, even though they disagree some other
+   way. Reads as a statement, not as a number, so it is not mistaken for one. */
+.delta__value--zero {
+  color: var(--ink-muted);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-size: 12px;
+  min-width: 0;
+  text-align: left;
+}
+
+/* ---------------------------------------------------------- annotation row */
+/*
+ * One sentence of plain English per disagreement, sitting under its row like a
+ * margin note. This is what a reviewer reads instead of opening the CSV.
+ */
+
+.note {
+  grid-column: 1 / -1;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  padding: 0.15rem 0.25rem 0.85rem;
+  max-width: 96ch;
+}
+
+.note__ids {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 11.5px;
+  color: var(--ink-muted);
+}
+
+/* --------------------------------------------------------------- utilities */
+
+.toolbar {
+  display: flex;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+  align-items: baseline;
+  margin-bottom: 1rem;
+}
+
+.toolbar label {
+  font-size: 12px;
+  color: var(--ink-muted);
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+}
+
+.toolbar select {
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--axis);
+  padding: 0.1rem 0.15rem;
+  cursor: pointer;
+}
+
+.toolbar select:focus-visible {
+  outline: 2px solid var(--under);
+  outline-offset: 2px;
+}
+
+.message {
+  padding: 1.5rem 0.25rem;
+  color: var(--ink-muted);
+}
+
+.message--error {
+  color: var(--over);
+}
